@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dark Forest 2D Map Editor</title>
+    <style>
+        :root {
+            --bg-color: #1a1e1a;
+            --panel-bg: #2a312a;
+            --text-color: #a4bba4;
+            --accent: #4a6b4a;
+            --accent-hover: #5c855c;
+            --grid-line: #222922;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        
+        /* Layout */
+        #app { display: flex; height: 100vh; width: 100vw; }
+        #canvas-container { flex-grow: 1; position: relative; overflow: hidden; cursor: crosshair; }
+        canvas { position: absolute; top: 0; left: 0; touch-action: none; }
+        
+        /* Sidebar */
+        #sidebar { width: 300px; background-color: var(--panel-bg); border-left: 2px solid var(--accent); display: flex; flex-direction: column; overflow-y: auto; z-index: 10; }
+        .section { padding: 15px; border-bottom: 1px solid var(--accent); }
+        .section h3 { margin-bottom: 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #fff; }
+        
+        /* Controls */
+        button, select, input[type="range"] { width: 100%; padding: 8px; margin-bottom: 8px; background: var(--bg-color); border: 1px solid var(--accent); color: var(--text-color); cursor: pointer; border-radius: 4px; }
+        button:hover { background: var(--accent-hover); color: #fff; }
+        .active-btn { background: var(--accent); color: #fff; }
+        
+        label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+        
+        /* Preset Grid */
+        .preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+        .preset-btn { font-size: 10px; padding: 5px 2px; text-align: center; height: 40px; display: flex; align-items: center; justify-content: center; word-wrap: break-word;}
+        
+        /* Joystick */
+        #joystick-zone { position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px; background: rgba(42, 49, 42, 0.7); border-radius: 50%; border: 2px solid var(--accent); z-index: 20; touch-action: none; }
+        #joystick-knob { position: absolute; top: 50%; left: 50%; width: 50px; height: 50px; background: var(--accent); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; transition: transform 0.05s; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="canvas-container">
+        <canvas id="mapCanvas"></canvas>
+        <div id="joystick-zone"><div id="joystick-knob"></div></div>
+    </div>
+
+    <div id="sidebar">
+        <div class="section">
+            <h3>Tools</h3>
+            <button id="btn-move" class="active-btn" onclick="setMode('move')">Move/Pan Camera</button>
+            <button id="btn-pen" onclick="setMode('pen')">Terrain Pen (Draw Flat Space)</button>
+            <button id="btn-erase" onclick="setMode('erase')">Eraser (Remove Assets/Terrain)</button>
+        </div>
+
+        <div class="section">
+            <h3>Dark Forest Assets</h3>
+            <select id="asset-category" onchange="renderAssetButtons()">
+                <option value="trees">Trees & Plants</option>
+                <option value="water">Water Bodies</option>
+                <option value="buildings">Buildings & Ruins</option>
+                <option value="farm">Farm Plots</option>
+                <option value="clutter">Ground Clutter</option>
+            </select>
+            <div id="preset-container" class="preset-grid"></div>
+        </div>
+
+        <div class="section">
+            <h3>Procedural Gen</h3>
+            <label><span>Area Size</span><span id="val-area">50</span></label>
+            <input type="range" id="gen-area" min="20" max="100" value="50" oninput="document.getElementById('val-area').innerText=this.value">
+            
+            <label><span>Tree Density</span><span id="val-trees">30%</span></label>
+            <input type="range" id="gen-trees" min="0" max="100" value="30" oninput="document.getElementById('val-trees').innerText=this.value+'%'">
+            
+            <label><span>Water Likelihood</span><span id="val-water">10%</span></label>
+            <input type="range" id="gen-water" min="0" max="50" value="10" oninput="document.getElementById('val-water').innerText=this.value+'%'">
+            
+            <button onclick="generateProcedural()">Generate Forest</button>
+        </div>
+
+        <div class="section">
+            <h3>Storage</h3>
+            <button onclick="saveMap()">Save Map Local</button>
+            <button onclick="loadMap()">Load Map Local</button>
+            <button onclick="clearMap()" style="border-color: #8b3a3a; color: #8b3a3a;">Clear All</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- CONFIG & ASSET DATABASE ---
+const TILE_SIZE = 32;
+let mode = 'move'; // move, pen, erase, place
+let activeAsset = 1;
+
+// The 30 Presets grouped by category.
+// 'footprint' specifies relative coordinates occupied by the object.
+// E.g., [[0,0], [1,0], [0,1]] means it takes up 3 squares.
+const presets = {
+    trees: [
+        { id: 1, name: "Pine", color: "#1b4d29", footprint: [[0,0]] },
+        { id: 2, name: "Oak", color: "#2e5c26", footprint: [[0,0]] },
+        { id: 3, name: "Dead Tree", color: "#54493f", footprint: [[0,0]] },
+        { id: 4, name: "Dark Wood", color: "#19241a", footprint: [[0,0]] },
+        { id: 5, name: "Willow", color: "#426b52", footprint: [[0,0]] },
+        { id: 6, name: "Tree Cluster", color: "#1b4d29", footprint: [[0,0],[1,0],[0,1]] }, // Takes 3 squares!
+        { id: 7, name: "Bush", color: "#324a2c", footprint: [[0,0]] },
+        { id: 8, name: "Thorns", color: "#2d2424", footprint: [[0,0]] }
+    ],
+    water: [
+        { id: 9, name: "Puddle", color: "#365c69", footprint: [[0,0]] },
+        { id: 10, name: "Pond", color: "#2d4d57", footprint: [[0,0]] },
+        { id: 11, name: "Deep Pond", color: "#19343d", footprint: [[0,0],[1,0],[0,1],[1,1]] },
+        { id: 12, name: "Stream H", color: "#365c69", footprint: [[0,0],[1,0]] },
+        { id: 13, name: "Stream V", color: "#365c69", footprint: [[0,0],[0,1]] }
+    ],
+    buildings: [
+        { id: 14, name: "Cabin", color: "#523c28", footprint: [[0,0],[1,0],[0,1],[1,1]] },
+        { id: 15, name: "Shack", color: "#453629", footprint: [[0,0],[1,0]] },
+        { id: 16, name: "Stone Ruin", color: "#575c57", footprint: [[0,0]] },
+        { id: 17, name: "Ruin Wall H", color: "#575c57", footprint: [[0,0],[1,0],[2,0]] },
+        { id: 18, name: "Ruin Wall V", color: "#575c57", footprint: [[0,0],[0,1],[0,2]] },
+        { id: 19, name: "Entry Portal", color: "#8b20a1", footprint: [[0,0],[1,0],[0,1]] }, // Takes 3 squares!
+        { id: 20, name: "Custom Struct", color: "#c2b280", footprint: [[0,0]] }
+    ],
+    farm: [
+        { id: 21, name: "Tilled Dirt", color: "#422e1d", footprint: [[0,0]] },
+        { id: 22, name: "Wheat", color: "#a89436", footprint: [[0,0]] },
+        { id: 23, name: "Carrots", color: "#c26d21", footprint: [[0,0]] },
+        { id: 24, name: "Pumpkins", color: "#d95f14", footprint: [[0,0]] },
+        { id: 25, name: "Scarecrow", color: "#b5a374", footprint: [[0,0]] }
+    ],
+    clutter: [
+        { id: 26, name: "Rock", color: "#494d49", footprint: [[0,0]] },
+        { id: 27, name: "Mossy Rock", color: "#3d5440", footprint: [[0,0]] },
+        { id: 28, name: "Log", color: "#594635", footprint: [[0,0]] },
+        { id: 29, name: "Bones", color: "#d4d2c9", footprint: [[0,0]] },
+        { id: 30, name: "Dirt Path", color: "#4a3c2d", footprint: [[0,0]] }
+    ]
+};
+
+// Flatten map for easy lookup
+const assetMap = new Map();
+Object.values(presets).forEach(cat => cat.forEach(item => assetMap.set(item.id, item)));
+
+// --- STATE ---
+// Compact storage: keys are "x,y". Values are asset IDs or 1 (for terrain)
+let mapData = {
+    terrain: {}, // Ground layer drawn by pen
+    assets: {}   // Placed presets
+};
+
+let camera = { x: 0, y: 0 };
+let isDrawing = false;
+let canvas = document.getElementById('mapCanvas');
+let ctx = canvas.getContext('2d');
+
+// --- UI LOGIC ---
+function resize() {
+    canvas.width = document.getElementById('canvas-container').clientWidth;
+    canvas.height = document.getElementById('canvas-container').clientHeight;
+    drawMap();
+}
+window.addEventListener('resize', resize);
+
+function setMode(newMode) {
+    mode = newMode;
+    document.querySelectorAll('.section:first-child button').forEach(b => b.classList.remove('active-btn'));
+    if(newMode !== 'place') document.getElementById('btn-'+newMode).classList.add('active-btn');
+}
+
+function renderAssetButtons() {
+    const cat = document.getElementById('asset-category').value;
+    const container = document.getElementById('preset-container');
+    container.innerHTML = '';
+    presets[cat].forEach(item => {
+        let btn = document.createElement('button');
+        btn.className = 'preset-btn';
+        btn.innerText = item.name;
+        btn.style.borderBottom = `4px solid ${item.color}`;
+        btn.onclick = () => {
+            activeAsset = item.id;
+            setMode('place');
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active-btn'));
+            btn.classList.add('active-btn');
+        };
+        container.appendChild(btn);
+    });
+}
+
+// --- RENDER LOGIC ---
+function drawMap() {
+    ctx.fillStyle = "#1a1e1a"; // Dark void background
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Calculate visible grid boundaries based on camera
+    const startCol = Math.floor(camera.x / TILE_SIZE);
+    const endCol = startCol + (canvas.width / TILE_SIZE) + 1;
+    const startRow = Math.floor(camera.y / TILE_SIZE);
+    const endRow = startRow + (canvas.height / TILE_SIZE) + 1;
+
+    // Draw Grid Lines (Optimization: only draw visible lines)
+    ctx.strokeStyle = "var(--grid-line)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = startCol; x <= endCol; x++) {
+        let screenX = Math.floor((x * TILE_SIZE) - camera.x);
+        ctx.moveTo(screenX, 0); ctx.lineTo(screenX, canvas.height);
+    }
+    for (let y = startRow; y <= endRow; y++) {
+        let screenY = Math.floor((y * TILE_SIZE) - camera.y);
+        ctx.moveTo(0, screenY); ctx.lineTo(canvas.width, screenY);
+    }
+    ctx.stroke();
+
+    // Draw Terrain Layer
+    ctx.fillStyle = "#273b27"; // Dark mossy forest floor
+    for (const key in mapData.terrain) {
+        const [x, y] = key.split(',').map(Number);
+        if (x >= startCol-1 && x <= endCol && y >= startRow-1 && y <= endRow) {
+            ctx.fillRect(Math.floor((x * TILE_SIZE) - camera.x), Math.floor((y * TILE_SIZE) - camera.y), TILE_SIZE, TILE_SIZE);
+        }
+    }
+
+    // Draw Asset Layer
+    for (const key in mapData.assets) {
+        const [x, y] = key.split(',').map(Number);
+        const assetId = mapData.assets[key];
+        const asset = assetMap.get(assetId);
+        
+        if (asset && x >= startCol-2 && x <= endCol && y >= startRow-2 && y <= endRow) {
+            ctx.fillStyle = asset.color;
+            // Draw according to footprint
+            asset.footprint.forEach(fp => {
+                let dx = x + fp[0];
+                let dy = y + fp[1];
+                ctx.fillRect(
+                    Math.floor((dx * TILE_SIZE) - camera.x) + 2, 
+                    Math.floor((dy * TILE_SIZE) - camera.y) + 2, 
+                    TILE_SIZE - 4, TILE_SIZE - 4
+                );
+            });
+        }
+    }
+}
+
+// --- INTERACTION ---
+function getGridCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    // Support mouse and touch
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const x = Math.floor((clientX - rect.left + camera.x) / TILE_SIZE);
+    const y = Math.floor((clientY - rect.top + camera.y) / TILE_SIZE);
+    return { x, y };
+}
+
+function handleCanvasAction(e) {
+    if(mode === 'move') return; // Joystick handles move
+    const { x, y } = getGridCoords(e);
+    const key = `${x},${y}`;
+
+    if (mode === 'pen') {
+        mapData.terrain[key] = 1;
+    } else if (mode === 'erase') {
+        // Erase asset or terrain
+        let assetErased = false;
+        // Need to check footprints for complex assets
+        for (const aKey in mapData.assets) {
+            const [ax, ay] = aKey.split(',').map(Number);
+            const asset = assetMap.get(mapData.assets[aKey]);
+            if(asset) {
+                for (let fp of asset.footprint) {
+                    if (ax + fp[0] === x && ay + fp[1] === y) {
+                        delete mapData.assets[aKey];
+                        assetErased = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if(!assetErased) delete mapData.terrain[key]; // Fallback to erase floor
+        
+    } else if (mode === 'place' && e.type !== 'pointermove') {
+        // Only place on click, not drag (prevent spamming)
+        const asset = assetMap.get(activeAsset);
+        // Clear underlying spaces to prevent overlap
+        asset.footprint.forEach(fp => {
+            let clearKey = `${x + fp[0]},${y + fp[1]}`;
+            delete mapData.assets[clearKey];
+        });
+        mapData.assets[key] = activeAsset;
+    }
+    drawMap();
+}
+
+canvas.addEventListener('pointerdown', (e) => { isDrawing = true; handleCanvasAction(e); });
+canvas.addEventListener('pointermove', (e) => { if (isDrawing) handleCanvasAction(e); });
+window.addEventListener('pointerup', () => { isDrawing = false; });
+
+// --- JOYSTICK LOGIC ---
+const joyZone = document.getElementById('joystick-zone');
+const joyKnob = document.getElementById('joystick-knob');
+let joyActive = false;
+let joyVector = { x: 0, y: 0 };
+let animFrame;
+
+function handleJoystick(e) {
+    const rect = joyZone.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    let dx = clientX - (rect.left + rect.width / 2);
+    let dy = clientY - (rect.top + rect.height / 2);
+    
+    const distance = Math.min(rect.width / 2, Math.hypot(dx, dy));
+    const angle = Math.atan2(dy, dx);
+    
+    joyVector.x = (Math.cos(angle) * distance) / (rect.width / 2);
+    joyVector.y = (Math.sin(angle) * distance) / (rect.height / 2);
+    
+    joyKnob.style.transform = `translate(calc(-50% + ${Math.cos(angle)*distance}px), calc(-50% + ${Math.sin(angle)*distance}px))`;
+}
+
+joyZone.addEventListener('pointerdown', (e) => { joyActive = true; handleJoystick(e); cameraLoop(); });
+window.addEventListener('pointermove', (e) => { if (joyActive) handleJoystick(e); });
+window.addEventListener('pointerup', () => { 
+    joyActive = false; 
+    joyVector = {x:0, y:0}; 
+    joyKnob.style.transform = 'translate(-50%, -50%)'; 
+    cancelAnimationFrame(animFrame);
+});
+
+function cameraLoop() {
+    if (joyActive) {
+        camera.x += joyVector.x * 15; // Camera speed
+        camera.y += joyVector.y * 15;
+        drawMap();
+        animFrame = requestAnimationFrame(cameraLoop);
+    }
+}
+
+// --- PROCEDURAL GENERATION ---
+function generateProcedural() {
+    const size = parseInt(document.getElementById('gen-area').value);
+    const treeLikelihood = parseInt(document.getElementById('gen-trees').value) / 100;
+    const waterLikelihood = parseInt(document.getElementById('gen-water').value) / 100;
+    const clusterLikelihood = treeLikelihood * 0.2; // 20% of trees become clusters
+
+    // Start near current camera view
+    const originX = Math.floor(camera.x / TILE_SIZE) + 10; 
+    const originY = Math.floor(camera.y / TILE_SIZE) + 10;
+
+    for (let x = originX; x < originX + size; x++) {
+        for (let y = originY; y < originY + size; y++) {
+            const key = `${x},${y}`;
+            mapData.terrain[key] = 1; // Draw base terrain
+
+            if (mapData.assets[key]) continue; // Skip if already placed by multi-tile footprint
+
+            const rand = Math.random();
+            if (rand < waterLikelihood) {
+                // Determine water size randomly
+                mapData.assets[key] = Math.random() > 0.8 ? 11 : (Math.random() > 0.5 ? 10 : 9); 
+            } else if (rand < waterLikelihood + treeLikelihood) {
+                if (Math.random() < clusterLikelihood) {
+                    mapData.assets[key] = 6; // Tree Cluster (Takes 3 tiles: 0,0 / 1,0 / 0,1)
+                    // Reserve footprints so we don't overlap
+                    delete mapData.assets[`${x+1},${y}`];
+                    delete mapData.assets[`${x},${y+1}`];
+                } else {
+                    // Random standard tree (1-5)
+                    mapData.assets[key] = Math.floor(Math.random() * 5) + 1;
+                }
+            } else if (Math.random() < 0.05) {
+                // 5% chance for clutter
+                mapData.assets[key] = Math.floor(Math.random() * 5) + 26; // 26-30
+            }
+        }
+    }
+    drawMap();
+}
+
+// --- LOCAL STORAGE ---
+function saveMap() {
+    try {
+        const compactData = JSON.stringify(mapData);
+        localStorage.setItem('darkForestMap', compactData);
+        alert('Map successfully saved to local storage!');
+    } catch(e) {
+        alert('Failed to save map. Storage might be full.');
+    }
+}
+
+function loadMap() {
+    const saved = localStorage.getItem('darkForestMap');
+    if (saved) {
+        mapData = JSON.parse(saved);
+        drawMap();
+        alert('Map loaded!');
+    } else {
+        alert('No saved map found.');
+    }
+}
+
+function clearMap() {
+    if(confirm('Are you sure you want to clear the entire map?')) {
+        mapData = { terrain: {}, assets: {} };
+        drawMap();
+    }
+}
+
+// --- INIT ---
+renderAssetButtons();
+resize();
+</script>
+
+</body>
+</html>
