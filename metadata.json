@@ -1,0 +1,6 @@
+{
+  "name": "Bloxd One Block Map Planner",
+  "description": "A 2D Dark Forest themed map planner and explorer for bloxd.io one block worlds, complete with procedural generation, preset placement, drawing tools, local storage saving, and an interactive virtual joystick explorer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
