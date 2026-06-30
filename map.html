@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seedmap - World Explorer & Resource Finder</title>
+    <!-- Tailwind CSS for modern premium UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons for clean visuals -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar styling for sidebar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        /* Canvas styles */
+        canvas {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- HEADER / NAVIGATION -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="p-2 bg-emerald-500/10 rounded-lg text-emerald-400">
+                <i data-lucide="map" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight">Seedmap</h1>
+                <p class="text-xs text-slate-400">Bloxd & Sandbox World Analyzer</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
+                <span class="text-xs text-slate-400 font-medium">Active Seed:</span>
+                <input type="text" id="seedInput" value="123456789" class="bg-transparent text-sm font-semibold text-emerald-400 focus:outline-none w-28 text-center" />
+                <button id="applySeedBtn" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-2 py-1 rounded transition-colors duration-150">
+                    LOAD
+                </button>
+            </div>
+            <button id="helpBtn" class="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-all duration-150">
+                <i data-lucide="help-circle" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN WORKSPACE -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col transition-all duration-300 z-10 relative shrink-0">
+            <!-- Scrollable content -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-6">
+
+                <!-- FINDER MODES -->
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1">
+                        <i data-lucide="search" class="w-3.5 h-3.5 text-emerald-400"></i> Finder Mode
+                    </label>
+                    <div class="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800/80">
+                        <button id="finderOff" class="finder-btn py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-150 bg-slate-800 text-slate-100">
+                            Off
+                        </button>
+                        <button id="finderDiamond" class="finder-btn py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-900">
+                            Diamonds
+                        </button>
+                        <button id="finderMoonstone" class="finder-btn py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-900">
+                            Moonstone
+                        </button>
+                    </div>
+                </div>
+
+                <!-- NAVIGATION / CONTROLS -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1">
+                        <i data-lucide="sliders" class="w-3.5 h-3.5 text-indigo-400"></i> Map Settings
+                    </h3>
+                    
+                    <!-- Y-Levels -->
+                    <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/60 space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-400">Y-Level View Layer</span>
+                            <span id="yLevelDisplay" class="font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">Y: 0 (Plains)</span>
+                        </div>
+                        <input id="yLevelSlider" type="range" min="-4" max="3" value="0" class="w-full accent-indigo-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer">
+                        <div class="flex justify-between text-[10px] text-slate-500">
+                            <span>Deep Cave (-4)</span>
+                            <span>Surface (0)</span>
+                            <span>Sky (3)</span>
+                        </div>
+                    </div>
+
+                    <!-- Map Rotation -->
+                    <div class="flex items-center justify-between bg-slate-950 p-3 rounded-lg border border-slate-800/60 text-xs">
+                        <span class="text-slate-400">Map Rotation</span>
+                        <div class="flex items-center gap-1">
+                            <button id="rotateCCW" class="p-1 hover:bg-slate-800 text-slate-300 hover:text-white rounded">
+                                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                            </button>
+                            <span id="rotationVal" class="font-semibold text-slate-200 w-12 text-center">0°</span>
+                            <button id="rotateCW" class="p-1 hover:bg-slate-800 text-slate-300 hover:text-white rounded">
+                                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Measure Mode Toggle -->
+                    <button id="measureToggleBtn" class="w-full flex items-center justify-between bg-slate-950 hover:bg-slate-900 border border-slate-800/60 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-300 transition-all duration-150">
+                        <span class="flex items-center gap-2">
+                            <i data-lucide="ruler" class="w-4 h-4 text-emerald-400"></i> Measure Distance
+                        </span>
+                        <span id="measureStatus" class="bg-slate-800 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider text-slate-400">Off</span>
+                    </button>
+                </div>
+
+                <!-- WAYPOINTS SYSTEM -->
+                <div class="space-y-3 flex-1 flex flex-col">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1">
+                            <i data-lucide="navigation" class="w-3.5 h-3.5 text-cyan-400"></i> Waypoints
+                        </h3>
+                        <button id="addWaypointDirect" class="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Current
+                        </button>
+                    </div>
+
+                    <div class="bg-slate-950 rounded-lg border border-slate-800/60 max-h-60 overflow-y-auto" id="waypointList">
+                        <!-- Waypoints are injected here -->
+                        <div class="p-4 text-center text-xs text-slate-500 py-6" id="emptyWaypoints">
+                            No waypoints created yet. Double click anywhere on the map to add one.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Coordinate / Diagnostic Footer -->
+            <div class="bg-slate-950 border-t border-slate-800 p-4 shrink-0 text-xs text-slate-400 space-y-1">
+                <div class="flex justify-between">
+                    <span>Target Scale:</span>
+                    <span id="scaleDisplay" class="font-mono text-slate-200">1.0x</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Rendering Offset:</span>
+                    <span id="offsetDisplay" class="font-mono text-slate-200">0, 0</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CANVAS CONTAINER -->
+        <main class="flex-1 relative bg-slate-950 flex items-center justify-center h-full">
+            <canvas id="mapCanvas" class="w-full h-full cursor-grab active:cursor-grabbing"></canvas>
+
+            <!-- Floating Overlay: Coordinates Panel -->
+            <div class="absolute bottom-4 left-4 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-3 shadow-lg flex items-center gap-6 pointer-events-none text-xs">
+                <div>
+                    <span class="block text-[10px] uppercase tracking-wider text-slate-500 font-bold">Cursor X</span>
+                    <span id="hudX" class="font-mono text-slate-200 text-sm font-semibold">-</span>
+                </div>
+                <div>
+                    <span class="block text-[10px] uppercase tracking-wider text-slate-500 font-bold">Cursor Z</span>
+                    <span id="hudZ" class="font-mono text-slate-200 text-sm font-semibold">-</span>
+                </div>
+                <div class="border-l border-slate-800 h-6"></div>
+                <div>
+                    <span class="block text-[10px] uppercase tracking-wider text-slate-500 font-bold">Biome</span>
+                    <span id="hudBiome" class="text-emerald-400 text-xs font-semibold">-</span>
+                </div>
+            </div>
+
+            <!-- Floating Target Ore Coordinates HUD (Revealed when clicking a diamond / moonstone) -->
+            <div id="diamondCoordsHUD" class="hidden absolute bottom-4 right-4 bg-slate-900/95 border border-amber-500/30 rounded-xl p-4 shadow-lg w-72 space-y-3">
+                <div class="flex justify-between items-start">
+                    <div class="flex items-center gap-2">
+                        <div id="hudOreColor" class="w-3 h-3 rounded-full bg-blue-400 animate-pulse"></div>
+                        <h4 id="hudOreTitle" class="font-bold text-xs uppercase tracking-wider text-slate-200">Diamond Deposit</h4>
+                    </div>
+                    <button onclick="closeOreHud()" class="text-slate-400 hover:text-white">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-3 gap-2 bg-slate-950 p-2 rounded-lg border border-slate-800 text-center font-mono">
+                    <div>
+                        <span class="block text-[9px] text-slate-500">X</span>
+                        <span id="oreX" class="text-xs text-slate-200 font-bold">-142</span>
+                    </div>
+                    <div>
+                        <span class="block text-[9px] text-slate-500">Y</span>
+                        <span id="oreY" class="text-xs text-indigo-400 font-bold">-112</span>
+                    </div>
+                    <div>
+                        <span class="block text-[9px] text-slate-500">Z</span>
+                        <span id="oreZ" class="text-xs text-slate-200 font-bold">894</span>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-400 leading-normal">
+                    This resource is generated sequentially deep below standard layers. Grab your pickaxe and dig down!
+                </p>
+            </div>
+
+            <!-- Zoom & Utility Overlays -->
+            <div class="absolute top-4 right-4 flex flex-col gap-2">
+                <button id="zoomInBtn" class="w-10 h-10 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 rounded-lg flex items-center justify-center text-slate-200 transition-all duration-150 shadow-md">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                </button>
+                <button id="zoomOutBtn" class="w-10 h-10 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 rounded-lg flex items-center justify-center text-slate-200 transition-all duration-150 shadow-md">
+                    <i data-lucide="minus" class="w-5 h-5"></i>
+                </button>
+                <button id="recenterBtn" class="w-10 h-10 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 rounded-lg flex items-center justify-center text-slate-200 transition-all duration-150 shadow-md" title="Recenter Map">
+                    <i data-lucide="maximize-2" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: ADD WAYPOINT -->
+    <div id="waypointModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-xl p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-cyan-500/10 rounded-lg text-cyan-400">
+                    <i data-lucide="map-pin" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-100">Create Waypoint</h3>
+                    <p class="text-xs text-slate-400">Pin a landmark onto your map</p>
+                </div>
+            </div>
+            
+            <div class="space-y-3 pt-2">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Waypoint Name</label>
+                    <input type="text" id="wpNameInput" placeholder="My Base, Dungeon, etc." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500" />
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Coordinate X</label>
+                        <input type="number" id="wpXInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 font-mono focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Coordinate Z</label>
+                        <input type="number" id="wpZInput" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 font-mono focus:outline-none" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Icon Theme Color</label>
+                    <div class="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg p-2">
+                        <input type="color" id="wpColorInput" value="#06b6d4" class="w-8 h-8 rounded cursor-pointer border-0 bg-transparent" />
+                        <span class="text-xs text-slate-400">Choose map pin accent</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button id="cancelWaypointBtn" class="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 font-semibold text-xs transition-colors">
+                    Cancel
+                </button>
+                <button id="saveWaypointBtn" class="flex-1 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold text-xs transition-colors">
+                    Add Pin
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: HELP & INFO -->
+    <div id="helpModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-xl p-6 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-start">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="info" class="w-5 h-5 text-emerald-400"></i>
+                    <h3 class="font-bold text-slate-100">Seedmap Explorer Guide</h3>
+                </div>
+                <button id="closeHelpBtn" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-300 leading-relaxed max-h-96 overflow-y-auto pr-1">
+                <p>Welcome to the ultimate Seedmap app! This tool compiles all complex spatial coordinate logic directly inside an immersive interactive mapping canvas.</p>
+                
+                <h4 class="font-bold text-slate-100 text-sm mt-3 flex items-center gap-1">
+                    <i data-lucide="mouse-pointer-click" class="w-4 h-4 text-cyan-400"></i> Controls
+                </h4>
+                <ul class="list-disc pl-5 space-y-1 text-slate-400">
+                    <li><strong class="text-slate-300">Left Click & Drag</strong> to Pan the world.</li>
+                    <li><strong class="text-slate-300">Mouse Wheel</strong> to Zoom in and out.</li>
+                    <li><strong class="text-slate-300">Double Click</strong> on any point on the map to place a Custom Waypoint.</li>
+                </ul>
+
+                <h4 class="font-bold text-slate-100 text-sm mt-3 flex items-center gap-1">
+                    <i data-lucide="gem" class="w-4 h-4 text-blue-400"></i> Diamond & Moonstone Finder
+                </h4>
+                <p class="text-slate-400">Enable "Diamonds" or "Moonstone" finder modes. When active, deep ore structures will be sequentially calculated for the given Seed and plotted onto the grid. Click any generated ore point to view its target Y-layer depths!</p>
+
+                <h4 class="font-bold text-slate-100 text-sm mt-3 flex items-center gap-1">
+                    <i data-lucide="ruler" class="w-4 h-4 text-emerald-400"></i> Measure Tool
+                </h4>
+                <p class="text-slate-400">Click "Measure Distance" to turn on ruler markers. Click multiple locations on the map to see real-time vector path tracking with accurate voxel measurements.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM TOAST NOTIFICATION CONTAINER -->
+    <div id="toastContainer" class="fixed top-4 left-1/2 -translate-x-1/2 flex flex-col gap-2 z-[9999]"></div>
+
+    <!-- SCRIPT LOGIC -->
+    <script>
+        // Global State & Config
+        window.measureMode = false;
+        window.measurePoints = [];
+        window.mapRotation = 0; // Degrees (0, 90, 180, 270)
+        window.waypoints = JSON.parse(localStorage.getItem('bloxd_waypoints') || '[]');
+        
+        let currentSeed = "123456789";
+        let zoom = 1.0;
+        let pan = { x: 0, z: 0 };
+        let finderMode = 'off'; // 'off', 'diamond', 'moonstone'
+        let hoveredCoord = { x: 0, z: 0 };
+        
+        // Cache DOM elements
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
+        const seedInput = document.getElementById('seedInput');
+        const applySeedBtn = document.getElementById('applySeedBtn');
+        const yLevelSlider = document.getElementById('yLevelSlider');
+        const yLevelDisplay = document.getElementById('yLevelDisplay');
+        const rotationVal = document.getElementById('rotationVal');
+        const rotateCCW = document.getElementById('rotateCCW');
+        const rotateCW = document.getElementById('rotateCW');
+        const measureToggleBtn = document.getElementById('measureToggleBtn');
+        const measureStatus = document.getElementById('measureStatus');
+        const waypointList = document.getElementById('waypointList');
+        const emptyWaypoints = document.getElementById('emptyWaypoints');
+        const addWaypointDirect = document.getElementById('addWaypointDirect');
+        const scaleDisplay = document.getElementById('scaleDisplay');
+        const offsetDisplay = document.getElementById('offsetDisplay');
+        
+        // Coordinates HUD
+        const hudX = document.getElementById('hudX');
+        const hudZ = document.getElementById('hudZ');
+        const hudBiome = document.getElementById('hudBiome');
+        
+        // Ore Info HUD
+        const diamondCoordsHUD = document.getElementById('diamondCoordsHUD');
+        const hudOreColor = document.getElementById('hudOreColor');
+        const hudOreTitle = document.getElementById('hudOreTitle');
+        const oreX = document.getElementById('oreX');
+        const oreY = document.getElementById('oreY');
+        const oreZ = document.getElementById('oreZ');
+
+        // Waypoint Modal
+        const waypointModal = document.getElementById('waypointModal');
+        const wpNameInput = document.getElementById('wpNameInput');
+        const wpXInput = document.getElementById('wpXInput');
+        const wpZInput = document.getElementById('wpZInput');
+        const wpColorInput = document.getElementById('wpColorInput');
+        const saveWaypointBtn = document.getElementById('saveWaypointBtn');
+        const cancelWaypointBtn = document.getElementById('cancelWaypointBtn');
+
+        // Help Modal
+        const helpBtn = document.getElementById('helpBtn');
+        const helpModal = document.getElementById('helpModal');
+        const closeHelpBtn = document.getElementById('closeHelpBtn');
+
+        // Biome and Terrain Procedural Constants
+        const BIOMES = {
+            OCEAN: { name: "Deep Ocean", color: "#0f172a", border: "#1e3a8a" },
+            WATER: { name: "Shallow Waters", color: "#1d4ed8", border: "#1d4ed8" },
+            BEACH: { name: "Sandy Plains", color: "#fef08a", border: "#fef08a" },
+            PLAINS: { name: "Emerald Fields", color: "#10b981", border: "#059669" },
+            FOREST: { name: "Ancient Forest", color: "#047857", border: "#065f46" },
+            MOUNTAIN: { name: "High Peaks", color: "#64748b", border: "#475569" },
+            CAVE: { name: "Underground Abyss", color: "#0f172a", border: "#020617" }
+        };
+
+        // Custom seed-based pseudo random number generator (Linear Congruential Generator)
+        function seededRandom(seedStr) {
+            let hash = 0;
+            for (let i = 0; i < seedStr.length; i++) {
+                hash = seedStr.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return function() {
+                hash = (hash * 9301 + 49297) % 233280;
+                return hash / 233280;
+            };
+        }
+
+        // Safe Custom Toast (Replaces window.alert)
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `flex items-center gap-2 px-4 py-3 rounded-lg shadow-xl border text-xs font-semibold transform translate-y-2 transition-all duration-300 opacity-0`;
+            
+            if (type === 'success') {
+                toast.classList.add('bg-emerald-950', 'border-emerald-500/30', 'text-emerald-400');
+                toast.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> ${message}`;
+            } else if (type === 'error') {
+                toast.classList.add('bg-rose-950', 'border-rose-500/30', 'text-rose-400');
+                toast.innerHTML = `<i data-lucide="alert-triangle" class="w-4 h-4"></i> ${message}`;
+            } else {
+                toast.classList.add('bg-slate-900', 'border-slate-800', 'text-slate-300');
+                toast.innerHTML = `<i data-lucide="info" class="w-4 h-4"></i> ${message}`;
+            }
+            
+            container.appendChild(toast);
+            lucide.createIcons();
+            
+            // Trigger animation
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', 'translate-y-2');
+            }, 10);
+            
+            // Auto destroy
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Core procedural engine mapping chunk locations to seeds
+        function getBiomeAt(worldX, worldZ) {
+            const currentY = parseInt(yLevelSlider.value);
+            
+            // Deep underground view
+            if (currentY < -1) {
+                return BIOMES.CAVE;
+            }
+
+            // Pseudo-noise creation using Trigonometry + Seed hashing
+            let seedVal = 0;
+            for(let i=0; i<currentSeed.length; i++) {
+                seedVal += currentSeed.charCodeAt(i) * (i + 1);
+            }
+            
+            // Generate structural waves using sine coordinates combined with seed value
+            const nx = worldX / 120 + Math.sin(seedVal) * 10;
+            const nz = worldZ / 120 + Math.cos(seedVal) * 10;
+            
+            // Layering noise octaves
+            const noise = Math.sin(nx) * 0.5 + Math.sin(nz * 0.8) * 0.3 + Math.sin(nx * 2 + nz * 2) * 0.2;
+            
+            // Map height value into distinctive visual Biomes
+            if (noise < -0.4) return BIOMES.OCEAN;
+            if (noise < -0.1) return BIOMES.WATER;
+            if (noise < 0.0) return BIOMES.BEACH;
+            if (noise < 0.5) return BIOMES.PLAINS;
+            if (noise < 0.8) return BIOMES.FOREST;
+            return BIOMES.MOUNTAIN;
+        }
+
+        // Generate static rich ores corresponding with current seed
+        function getOresInViewport() {
+            if (finderMode === 'off') return [];
+            
+            const ores = [];
+            const rnd = seededRandom(currentSeed + finderMode);
+            
+            // Generate reproducible grid of ore coordinate nodes around current viewport
+            const centerChunkX = Math.floor((-pan.x) / 32);
+            const centerChunkZ = Math.floor((-pan.z) / 32);
+            const scanRange = Math.ceil(8 / zoom); // Dyn scale scanning block depending on view
+
+            for (let cx = centerChunkX - scanRange; cx <= centerChunkX + scanRange; cx++) {
+                for (let cz = centerChunkZ - scanRange; cz <= centerChunkZ + scanRange; cz++) {
+                    // Seed-based chunk deterministic roll
+                    const chunkSeed = (cx * 73856093) ^ (cz * 19349663) ^ parseInt(currentSeed || "0");
+                    const chunkRnd = seededRandom(String(chunkSeed));
+                    
+                    if (chunkRnd() < 0.18) { // 18% Chance of block spawn inside scanned chunks
+                        const localX = Math.floor(chunkRnd() * 32);
+                        const localZ = Math.floor(chunkRnd() * 32);
+                        const worldX = cx * 32 + localX;
+                        const worldZ = cz * 32 + localZ;
+                        
+                        // Seed specific depth variance
+                        const worldY = -20 - Math.floor(chunkRnd() * 120); 
+                        
+                        ores.push({
+                            x: worldX,
+                            y: worldY,
+                            z: worldZ,
+                            type: finderMode
+                        });
+                    }
+                }
+            }
+            return ores;
+        }
+
+        // Window resize canvas standard auto adjustment
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            drawMap();
+        }
+
+        // Coordinate transforms tracking scale, zoom, center pan, rotation
+        function getTransformMatrix() {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            
+            return {
+                cx,
+                cy,
+                scale: zoom,
+                rotRad: (window.mapRotation * Math.PI) / 180
+            };
+        }
+
+        // Translate Canvas Coordinate -> World Grid Voxel (X, Z)
+        function screenToWorld(sx, sy) {
+            const { cx, cy, scale, rotRad } = getTransformMatrix();
+            
+            // Center space conversion
+            const px = sx - cx;
+            const py = sy - cy;
+            
+            // Invert Rotation
+            const rx = px * Math.cos(-rotRad) - py * Math.sin(-rotRad);
+            const rz = px * Math.sin(-rotRad) + py * Math.cos(-rotRad);
+            
+            // Invert Scale & Pan
+            const wx = Math.round(rx / scale - pan.x);
+            const wz = Math.round(rz / scale - pan.z);
+            
+            return { x: wx, z: wz };
+        }
+
+        // Translate World Grid Voxel (X, Z) -> Canvas Coordinate
+        function worldToScreen(wx, wz) {
+            const { cx, cy, scale, rotRad } = getTransformMatrix();
+            
+            // Apply Pan & Scale
+            const sx = (wx + pan.x) * scale;
+            const sz = (wz + pan.z) * scale;
+            
+            // Apply Rotation
+            const rx = sx * Math.cos(rotRad) - sz * Math.sin(rotRad);
+            const rz = sx * Math.sin(rotRad) + sz * Math.cos(rotRad);
+            
+            // Translate back to screen center
+            return {
+                x: rx + cx,
+                y: rz + cy
+            };
+        }
+
+        // Dynamic viewport drawing loop
+        function drawMap() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Update live metadata HUD
+            scaleDisplay.textContent = `${zoom.toFixed(2)}x`;
+            offsetDisplay.textContent = `${Math.round(-pan.x)}, ${Math.round(-pan.z)}`;
+
+            // Render world blocks inside visual screen limits
+            const bounds = {
+                min: screenToWorld(0, 0),
+                max: screenToWorld(canvas.width, canvas.height)
+            };
+
+            // Calculate bounding box bounds factoring in rotation extreme dimensions
+            const left = Math.min(bounds.min.x, bounds.max.x) - 16;
+            const right = Math.max(bounds.min.x, bounds.max.x) + 16;
+            const top = Math.min(bounds.min.z, bounds.max.z) - 16;
+            const bottom = Math.max(bounds.min.z, bounds.max.z) + 16;
+
+            // Draw Voxel Grid Blocks
+            const tileSize = 16;
+            
+            // Dynamic grouping of voxel step loops corresponding on distance ratio
+            let step = 1;
+            if (zoom < 0.15) step = 16;
+            else if (zoom < 0.4) step = 8;
+            else if (zoom < 0.8) step = 4;
+            else if (zoom < 1.5) step = 2;
+
+            // Draw procedural block polygons
+            for (let x = Math.floor(left / step) * step; x < right; x += step) {
+                for (let z = Math.floor(top / step) * step; z < bottom; z += step) {
+                    const biome = getBiomeAt(x, z);
+                    const pos = worldToScreen(x, z);
+                    
+                    // Render dynamically size adjusted polygon block
+                    const drawSize = Math.max(1, tileSize * zoom * step);
+                    ctx.fillStyle = biome.color;
+                    ctx.fillRect(pos.x - drawSize/2, pos.y - drawSize/2, drawSize, drawSize);
+
+                    // Add subtle grid borders on close magnification
+                    if (zoom > 1.2 && step === 1) {
+                        ctx.strokeStyle = "rgba(15, 23, 42, 0.15)";
+                        ctx.strokeRect(pos.x - drawSize/2, pos.y - drawSize/2, drawSize, drawSize);
+                    }
+                }
+            }
+
+            // Draw Compass Axis Lines at center coords (0, 0)
+            const origin = worldToScreen(0, 0);
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(239, 68, 68, 0.4)"; // Red X-Axis
+            ctx.lineWidth = 2;
+            ctx.moveTo(origin.x - 100, origin.y);
+            ctx.lineTo(origin.x + 100, origin.y);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(59, 130, 246, 0.4)"; // Blue Z-Axis
+            ctx.moveTo(origin.x, origin.y - 100);
+            ctx.lineTo(origin.x, origin.y + 100);
+            ctx.stroke();
+
+            // Draw Target Finder Ores
+            const ores = getOresInViewport();
+            ores.forEach(ore => {
+                const pos = worldToScreen(ore.x, ore.z);
+                
+                // Draw glowing pulse ring
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 8 * zoom, 0, 2 * Math.PI);
+                ctx.fillStyle = ore.type === 'diamond' ? 'rgba(56, 189, 248, 0.4)' : 'rgba(168, 85, 247, 0.4)';
+                ctx.fill();
+
+                // Draw solid inner core
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 4 * zoom, 0, 2 * Math.PI);
+                ctx.fillStyle = ore.type === 'diamond' ? '#38bdf8' : '#a855f7';
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.fill();
+                ctx.stroke();
+            });
+
+            // Draw Active Path Measurements
+            if (window.measurePoints.length > 0) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([6, 4]);
+
+                window.measurePoints.forEach((point, idx) => {
+                    const pos = worldToScreen(point.x, point.z);
+                    if (idx === 0) ctx.moveTo(pos.x, pos.y);
+                    else ctx.lineTo(pos.x, pos.y);
+                });
+                ctx.stroke();
+                ctx.setLineDash([]); // Reset line style
+
+                // Draw measuring point pins
+                window.measurePoints.forEach((point, idx) => {
+                    const pos = worldToScreen(point.x, point.z);
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 6, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#10b981';
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Text overlay index values
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 9px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(idx + 1, pos.x, pos.y);
+                });
+            }
+
+            // Draw Waypoints
+            window.waypoints.forEach(wp => {
+                // Verify waypoint corresponds directly to current loaded seed
+                if (wp.seed === currentSeed) {
+                    const pos = worldToScreen(wp.x, wp.z);
+                    
+                    // Render Map Pins
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y - 12, 8, 0, 2 * Math.PI);
+                    ctx.fillStyle = wp.color || '#06b6d4';
+                    ctx.strokeStyle = '#111827';
+                    ctx.lineWidth = 2;
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Triangular pin stand
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x - 4, pos.y - 7);
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.lineTo(pos.x + 4, pos.y - 7);
+                    ctx.closePath();
+                    ctx.fillStyle = wp.color || '#06b6d4';
+                    ctx.fill();
+
+                    // Tiny pin center glow
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y - 12, 3, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+
+                    // Waypoint name banner
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.lineWidth = 1;
+                    
+                    const label = wp.name;
+                    ctx.font = 'bold 10px sans-serif';
+                    const textWidth = ctx.measureText(label).width;
+                    
+                    // Draw rounded background banner
+                    ctx.beginPath();
+                    ctx.roundRect(pos.x - (textWidth + 10)/2, pos.y - 34, textWidth + 10, 16, 4);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Text drawing
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(label, pos.x, pos.y - 22);
+                }
+            });
+        }
+
+        // Custom UI dynamic element mapping for waypoints
+        function refreshWaypointList() {
+            // Filter list matching active seed
+            const activeList = window.waypoints.filter(wp => wp.seed === currentSeed);
+            
+            if (activeList.length === 0) {
+                emptyWaypoints.classList.remove('hidden');
+                // Remove elements matching selector
+                document.querySelectorAll('.wp-item').forEach(el => el.remove());
+                return;
+            }
+
+            emptyWaypoints.classList.add('hidden');
+            document.querySelectorAll('.wp-item').forEach(el => el.remove());
+
+            activeList.forEach((wp, actualIdx) => {
+                // Locate original index inside global store
+                const globalIdx = window.waypoints.findIndex(w => w === wp);
+
+                const item = document.createElement('div');
+                item.className = 'wp-item flex items-center justify-between p-2.5 border-b border-slate-800/60 hover:bg-slate-900/60 transition-colors duration-150';
+                item.innerHTML = `
+                    <div class="flex items-center gap-2 cursor-pointer text-left flex-1" onclick="jumpToCoord(${wp.x}, ${wp.z})">
+                        <span class="w-3 h-3 rounded-full shrink-0" style="background-color: ${wp.color}"></span>
+                        <div class="overflow-hidden">
+                            <span class="block text-xs font-semibold text-slate-200 truncate">${wp.name}</span>
+                            <span class="block text-[10px] font-mono text-slate-500">${wp.x}, ${wp.z}</span>
+                        </div>
+                    </div>
+                    <button class="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-all" onclick="deleteWaypoint(${globalIdx})">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                `;
+                waypointList.appendChild(item);
+            });
+            lucide.createIcons();
+        }
+
+        // Interactive click navigation to specific map points
+        window.jumpToCoord = function(x, z) {
+            pan.x = -x;
+            pan.z = -z;
+            zoom = 1.2; // Set ideal sight zoom
+            drawMap();
+            showToast(`Centered on waypoint [${x}, ${z}]`, 'info');
+        };
+
+        window.deleteWaypoint = function(idx) {
+            const wp = window.waypoints[idx];
+            window.waypoints.splice(idx, 1);
+            localStorage.setItem('bloxd_waypoints', JSON.stringify(window.waypoints));
+            refreshWaypointList();
+            drawMap();
+            showToast(`Deleted waypoint "${wp.name}"`, 'success');
+        };
+
+        // UI events
+        applySeedBtn.onclick = () => {
+            const val = seedInput.value.trim();
+            if (val) {
+                currentSeed = val;
+                showToast(`Loaded map structures for seed: "${val}"`, 'success');
+                drawMap();
+                refreshWaypointList();
+            }
+        };
+
+        // Zoom helpers
+        document.getElementById('zoomInBtn').onclick = () => {
+            zoom = Math.min(zoom * 1.5, 8.0);
+            drawMap();
+        };
+
+        document.getElementById('zoomOutBtn').onclick = () => {
+            zoom = Math.max(zoom / 1.5, 0.05);
+            drawMap();
+        };
+
+        document.getElementById('recenterBtn').onclick = () => {
+            pan = { x: 0, z: 0 };
+            zoom = 1.0;
+            drawMap();
+            showToast("Centered viewport at origin coords (0, 0)", 'info');
+        };
+
+        // Rotate engine configurations
+        rotateCW.onclick = () => {
+            window.mapRotation = (window.mapRotation + 90) % 360;
+            rotationVal.textContent = `${window.mapRotation}°`;
+            drawMap();
+        };
+
+        rotateCCW.onclick = () => {
+            window.mapRotation = (window.mapRotation - 90 + 360) % 360;
+            rotationVal.textContent = `${window.mapRotation}°`;
+            drawMap();
+        };
+
+        // Switch slider layers
+        yLevelSlider.oninput = (e) => {
+            const val = parseInt(e.target.value);
+            let layerName = "Surface";
+            if (val < 0) layerName = `Underground L${Math.abs(val)}`;
+            else if (val > 0) layerName = `Overground Layer ${val}`;
+            
+            yLevelDisplay.textContent = `Y: ${val} (${layerName})`;
+            drawMap();
+        };
+
+        // Direct waypoint action buttons
+        addWaypointDirect.onclick = () => {
+            wpNameInput.value = "New Landmark";
+            wpXInput.value = Math.round(-pan.x);
+            wpZInput.value = Math.round(-pan.z);
+            waypointModal.classList.remove('hidden');
+        };
+
+        // Finder Mode Selector Buttons
+        const finderBtns = {
+            off: document.getElementById('finderOff'),
+            diamond: document.getElementById('finderDiamond'),
+            moonstone: document.getElementById('finderMoonstone')
+        };
+
+        function selectFinderMode(mode) {
+            finderMode = mode;
+            // Update UI selected indicators
+            Object.keys(finderBtns).forEach(key => {
+                const btn = finderBtns[key];
+                if (key === mode) {
+                    btn.className = "finder-btn py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-150 bg-slate-800 text-slate-100 shadow-sm";
+                } else {
+                    btn.className = "finder-btn py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-900";
+                }
+            });
+            drawMap();
+            
+            if (mode !== 'off') {
+                showToast(`Resource scanning activated for: ${mode.toUpperCase()}S`, 'success');
+            } else {
+                showToast("Ore scanner offline", 'info');
+            }
+        }
+
+        finderBtns.off.onclick = () => selectFinderMode('off');
+        finderBtns.diamond.onclick = () => selectFinderMode('diamond');
+        finderBtns.moonstone.onclick = () => selectFinderMode('moonstone');
+
+        // Close Ore Coordinates Card
+        window.closeOreHud = function() {
+            diamondCoordsHUD.classList.add('hidden');
+        };
+
+        // Distance Ruler Logic
+        measureToggleBtn.onclick = () => {
+            window.measureMode = !window.measureMode;
+            if (window.measureMode) {
+                window.measurePoints = [];
+                measureStatus.textContent = "On";
+                measureStatus.className = "bg-emerald-500/20 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider text-emerald-400";
+                measureToggleBtn.classList.add('border-emerald-500/30', 'bg-emerald-950/20');
+                showToast("Click multiple points on the map to calculate distances.", 'info');
+            } else {
+                measureStatus.textContent = "Off";
+                measureStatus.className = "bg-slate-800 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider text-slate-400";
+                measureToggleBtn.className = "w-full flex items-center justify-between bg-slate-950 hover:bg-slate-900 border border-slate-800/60 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-300 transition-all duration-150";
+                window.measurePoints = [];
+                drawMap();
+            }
+        };
+
+        // Help Modal Controls
+        helpBtn.onclick = () => helpModal.classList.remove('hidden');
+        closeHelpBtn.onclick = () => helpModal.classList.add('hidden');
+
+        // Waypoint Modal Controls
+        cancelWaypointBtn.onclick = () => {
+            waypointModal.classList.add('hidden');
+        };
+
+        saveWaypointBtn.onclick = () => {
+            const name = wpNameInput.value.trim() || "Waypoint";
+            const xVal = parseInt(wpXInput.value);
+            const zVal = parseInt(wpZInput.value);
+            const color = wpColorInput.value;
+
+            if (isNaN(xVal) || isNaN(zVal)) {
+                showToast("Please enter valid map coordinate coordinates.", 'error');
+                return;
+            }
+
+            window.waypoints.push({
+                x: xVal,
+                z: zVal,
+                name: name,
+                color: color,
+                seed: currentSeed
+            });
+
+            localStorage.setItem('bloxd_waypoints', JSON.stringify(window.waypoints));
+            refreshWaypointList();
+            drawMap();
+            
+            waypointModal.classList.add('hidden');
+            showToast(`Created landmark "${name}" at [${xVal}, ${zVal}]`, 'success');
+        };
+
+        // Interactive Map Mouse & Touch Controls
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let dragPanStart = { x: 0, y: 0 };
+        let hasMoved = false;
+
+        // Interactive Mouse Handler
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            dragStart = { x: e.clientX, y: e.clientY };
+            dragPanStart = { ...pan };
+            hasMoved = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            // Capture cursor position coordinates inside World space
+            const bounds = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - bounds.left;
+            const mouseY = e.clientY - bounds.top;
+            
+            hoveredCoord = screenToWorld(mouseX, mouseY);
+            hudX.textContent = hoveredCoord.x;
+            hudZ.textContent = hoveredCoord.z;
+            hudBiome.textContent = getBiomeAt(hoveredCoord.x, hoveredCoord.z).name;
+
+            if (isDragging) {
+                const dx = e.clientX - dragStart.x;
+                const dy = e.clientY - dragStart.y;
+                
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+                    hasMoved = true;
+                }
+
+                // Factoring rotation angles into drag conversions
+                const rotRad = (window.mapRotation * Math.PI) / 180;
+                
+                // Invert rotation direction to match screen coordinate shifts
+                const rx = dx * Math.cos(-rotRad) - dy * Math.sin(-rotRad);
+                const rz = dx * Math.sin(-rotRad) + dy * Math.cos(-rotRad);
+
+                pan.x = dragPanStart.x + rx / zoom;
+                pan.z = dragPanStart.z + rz / zoom;
+                
+                drawMap();
+            }
+        });
+
+        // Touch Support
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                dragPanStart = { ...pan };
+                hasMoved = false;
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (isDragging && e.touches.length === 1) {
+                const dx = e.touches[0].clientX - dragStart.x;
+                const dy = e.touches[0].clientY - dragStart.y;
+                
+                const rotRad = (window.mapRotation * Math.PI) / 180;
+                const rx = dx * Math.cos(-rotRad) - dy * Math.sin(-rotRad);
+                const rz = dx * Math.sin(-rotRad) + dy * Math.cos(-rotRad);
+
+                pan.x = dragPanStart.x + rx / zoom;
+                pan.z = dragPanStart.z + rz / zoom;
+                
+                drawMap();
+            }
+        });
+
+        canvas.addEventListener('touchend', () => {
+            isDragging = false;
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            // Check if user clicked on structural elements
+            if (!hasMoved) {
+                const bounds = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - bounds.left;
+                const mouseY = e.clientY - bounds.top;
+                const clickedWorld = screenToWorld(mouseX, mouseY);
+
+                // Handle Measure Mode Add node
+                if (window.measureMode) {
+                    window.measurePoints.push(clickedWorld);
+                    
+                    // Display calculation results
+                    if (window.measurePoints.length > 1) {
+                        const p1 = window.measurePoints[window.measurePoints.length - 2];
+                        const p2 = window.measurePoints[window.measurePoints.length - 1];
+                        const dist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.z - p1.z, 2));
+                        showToast(`Segment distance: ${Math.round(dist)} blocks`, 'info');
+                    }
+                    drawMap();
+                    return;
+                }
+
+                // Handle Ore Pin Selection
+                if (finderMode !== 'off') {
+                    const ores = getOresInViewport();
+                    const clickedOre = ores.find(ore => {
+                        const dist = Math.sqrt(Math.pow(clickedWorld.x - ore.x, 2) + Math.pow(clickedWorld.z - ore.z, 2));
+                        return dist < (10 / zoom); // Check proximity radius matching current zoom
+                    });
+
+                    if (clickedOre) {
+                        // Reveal coordinates panel
+                        hudOreColor.className = `w-3 h-3 rounded-full animate-pulse ${clickedOre.type === 'diamond' ? 'bg-blue-400' : 'bg-purple-400'}`;
+                        hudOreTitle.textContent = `${clickedOre.type === 'diamond' ? 'Diamond' : 'Moonstone'} Block`;
+                        oreX.textContent = clickedOre.x;
+                        oreY.textContent = clickedOre.y;
+                        oreZ.textContent = clickedOre.z;
+                        diamondCoordsHUD.classList.remove('hidden');
+                        showToast(`Locked onto ${clickedOre.type} target coordinates!`, 'success');
+                        return;
+                    }
+                }
+            }
+        });
+
+        // Double Click listener maps coordinates direct to Waypoint creation
+        canvas.addEventListener('dblclick', (e) => {
+            const bounds = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - bounds.left;
+            const mouseY = e.clientY - bounds.top;
+            const clickedWorld = screenToWorld(mouseX, mouseY);
+
+            wpNameInput.value = "New Waypoint";
+            wpXInput.value = clickedWorld.x;
+            wpZInput.value = clickedWorld.z;
+            waypointModal.classList.remove('hidden');
+        });
+
+        // Handle Wheel Zoom Focus
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const bounds = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - bounds.left;
+            const mouseY = e.clientY - bounds.top;
+
+            // Log coordinates before applying zooms
+            const worldBefore = screenToWorld(mouseX, mouseY);
+
+            // Execute scaled values
+            const zoomFactor = e.deltaY < 0 ? 1.25 : 0.8;
+            zoom = Math.max(0.05, Math.min(zoom * zoomFactor, 8.0));
+
+            // Adjust offset positions keeping the cursor pinned relative to world maps
+            const worldAfter = screenToWorld(mouseX, mouseY);
+            pan.x += (worldAfter.x - worldBefore.x);
+            pan.z += (worldAfter.z - worldBefore.z);
+
+            drawMap();
+        }, { passive: false });
+
+        // Initialize App
+        window.onload = () => {
+            resizeCanvas();
+            refreshWaypointList();
+            lucide.createIcons();
+            
+            // Show welcome message
+            setTimeout(() => {
+                showToast("Seedmap Loaded! Double-click anywhere to place a custom Waypoint.", 'success');
+            }, 500);
+        };
+
+        window.onresize = resizeCanvas;
+    </script>
+</body>
+</html>
